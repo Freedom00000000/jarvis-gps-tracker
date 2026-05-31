@@ -388,7 +388,7 @@ function onPosition(pos) {
   document.getElementById('d-alt').textContent = altitude ? altitude.toFixed(1)+' m' : 'N/A';
   const spd = speed !== null ? (speed * 3.6).toFixed(1)+' km/h' : '0.0 km/h';
   document.getElementById('d-speed').textContent = spd;
-  const hdg = heading !== null ? heading.toFixed(0)+'°' : '---°';
+  const hdg = Number.isFinite(heading) ? heading.toFixed(0)+'°' : '---°';
   document.getElementById('d-heading').textContent = hdg;
   document.getElementById('d-acc').textContent = accuracy.toFixed(0)+' m';
   document.getElementById('d-dist').textContent = (totalDist/1000).toFixed(2)+' km';
@@ -396,7 +396,7 @@ function onPosition(pos) {
   document.getElementById('d-time').textContent = now.toLocaleTimeString();
 
   // Compass
-  if (heading !== null) {
+  if (Number.isFinite(heading)) {
     document.getElementById('compass-needle').style.transform =
       `translateX(-50%) translateY(-100%) rotate(${heading}deg)`;
   }
