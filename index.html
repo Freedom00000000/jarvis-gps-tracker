@@ -96,7 +96,7 @@
   .btn .icon { margin-right:8px; }
 
   /* COMPASS */
-  #compass-wrap {
+  .compass-wrap {
     display:flex; justify-content:center; margin:12px 0;
   }
   #compass {
@@ -246,7 +246,7 @@
 </div>
 
 <!-- STATUS BAR -->
-<div id="status-bar" id="status-bar">
+<div id="status-bar">
   SYS READY &mdash; <span>AWAITING GPS LOCK</span> &mdash; JARVIS v2.0
 </div>
 
@@ -388,8 +388,8 @@ function onPosition(pos) {
   document.getElementById('d-alt').textContent = altitude ? altitude.toFixed(1)+' m' : 'N/A';
   const spd = speed !== null ? (speed * 3.6).toFixed(1)+' km/h' : '0.0 km/h';
   document.getElementById('d-speed').textContent = spd;
-  const hdg = heading !== null ? heading.toFixed(0)+'&deg;' : '---&deg;';
-  document.getElementById('d-heading').innerHTML = hdg;
+  const hdg = heading !== null ? heading.toFixed(0)+'°' : '---°';
+  document.getElementById('d-heading').textContent = hdg;
   document.getElementById('d-acc').textContent = accuracy.toFixed(0)+' m';
   document.getElementById('d-dist').textContent = (totalDist/1000).toFixed(2)+' km';
   document.getElementById('d-pts').textContent = trail.length;
@@ -425,7 +425,7 @@ function drawTrail() {
   const points = trail.map(p => [p.lat, p.lng]);
   if (trailLine) map.removeLayer(trailLine);
   trailLine = L.polyline(points, {
-    color:'var(--blue)', weight:2.5, opacity:0.7, dashArray:'6,4'
+    color:'#00e5ff', weight:2.5, opacity:0.7, dashArray:'6,4'
   }).addTo(map);
 }
 
