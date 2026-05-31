@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>J.A.R.V.I.S. GPS TRACKER</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --red: #e53935;
+    --gold: #ffd600;
+    --blue: #00e5ff;
+    --dark: #0a0c10;
+    --panel: rgba(10,14,20,0.92);
+    --border: rgba(0,229,255,0.25);
+    --green: #00e676;
+    --amber: #ffab00;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--dark); color:#cdd6f4; font-family:'Courier New',monospace; height:100vh; overflow:hidden; }
+
+  /* SCANLINE OVERLAY */
+  body::after {
+    content:''; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,229,255,0.015) 2px,rgba(0,229,255,0.015) 4px);
+    pointer-events:none; z-index:9999;
+  }
+
+  #map { width:100%; height:100vh; z-index:1; }
+
+  /* CORNER BRACKETS */
+  .corner { position:fixed; width:24px; height:24px; z-index:100; }
+  .corner.tl { top:8px; left:8px; border-top:2px solid var(--blue); border-left:2px solid var(--blue); }
+  .corner.tr { top:8px; right:8px; border-top:2px solid var(--blue); border-right:2px solid var(--blue); }
+  .corner.bl { bottom:8px; left:8px; border-bottom:2px solid var(--blue); border-left:2px solid var(--blue); }
+  .corner.br { bottom:8px; right:8px; border-bottom:2px solid var(--blue); border-right:2px solid var(--blue); }
+
+  /* TOP HUD */
+  #hud-top {
+    position:fixed; top:16px; left:50%; transform:translateX(-50%);
+    z-index:200; background:var(--panel); border:1px solid var(--border);
+    padding:8px 24px; border-radius:4px;
+    display:flex; align-items:center; gap:20px;
+    text-transform:uppercase; font-size:11px; letter-spacing:2px;
+    box-shadow:0 0 20px rgba(0,229,255,0.1);
+  }
+  #hud-top .title { color:var(--blue); font-size:13px; letter-spacing:4px; font-weight:bold; }
+  #status-dot { width:10px; height:10px; border-radius:50%; background:var(--amber); animation:pulse 1.5s infinite; }
+  #status-dot.tracking { background:var(--green); }
+  #status-dot.stopped { background:var(--red); animation:none; }
+  #status-text { font-size:10px; letter-spacing:1px; }
+
+  /* LEFT PANEL */
+  #panel-left {
+    position:fixed; left:12px; top:50%; transform:translateY(-50%);
+    z-index:200; background:var(--panel); border:1px solid var(--border);
+    padding:16px; border-radius:4px; min-width:200px;
+    box-shadow:0 0 20px rgba(0,229,255,0.08);
+  }
+  .panel-title {
+    color:var(--blue); font-size:9px; letter-spacing:3px;
+    text-transform:uppercase; margin-bottom:12px;
+    border-bottom:1px solid var(--border); padding-bottom:6px;
+  }
+  .data-row {
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom:8px; font-size:11px;
+  }
+  .data-label { color:#6b7280; letter-spacing:1px; text-transform:uppercase; font-size:9px; }
+  .data-value { color:var(--gold); font-size:12px; font-weight:bold; letter-spacing:1px; }
+  .data-value.blue { color:var(--blue); }
+  .data-value.green { color:var(--green); }
+
+  /* RIGHT PANEL - CONTROLS */
+  #panel-right {
+    position:fixed; right:12px; top:50%; transform:translateY(-50%);
+    z-index:200; background:var(--panel); border:1px solid var(--border);
+    padding:16px; border-radius:4px; min-width:180px;
+    box-shadow:0 0 20px rgba(0,229,255,0.08);
+  }
+
+  /* BUTTONS */
+  .btn {
+    display:block; width:100%; padding:8px 12px;
+    background:transparent; border:1px solid var(--border);
+    color:#cdd6f4; font-family:'Courier New',monospace;
+    font-size:10px; letter-spacing:2px; text-transform:uppercase;
+    cursor:pointer; border-radius:3px; margin-bottom:8px;
+    transition:all 0.2s; text-align:left;
+  }
+  .btn:hover { background:rgba(0,229,255,0.08); border-color:var(--blue); color:var(--blue); }
+  .btn.active { background:rgba(0,230,118,0.12); border-color:var(--green); color:var(--green); }
+  .btn.danger { border-color:rgba(229,57,53,0.4); }
+  .btn.danger:hover { background:rgba(229,57,53,0.12); border-color:var(--red); color:var(--red); }
+  .btn .icon { margin-right:8px; }
+
+  /* COMPASS */
+  #compass-wrap {
+    display:flex; justify-content:center; margin:12px 0;
+  }
+  #compass {
+    width:60px; height:60px; border:1px solid var(--border);
+    border-radius:50%; position:relative;
+    background:radial-gradient(circle, rgba(0,229,255,0.05), transparent);
+  }
+  #compass::before {
+    content:'N'; position:absolute; top:2px; left:50%; transform:translateX(-50%);
+    color:var(--red); font-size:9px; font-weight:bold;
+  }
+  #compass-needle {
+    position:absolute; top:50%; left:50%;
+    width:2px; height:24px; background:linear-gradient(var(--red) 50%, #555 50%);
+    transform-origin:50% 100%; transform:translateX(-50%) translateY(-100%) rotate(0deg);
+    transition:transform 0.5s;
+  }
+
+  /* BOTTOM STATUS BAR */
+  #status-bar {
+    position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
+    z-index:200; background:var(--panel); border:1px solid var(--border);
+    padding:6px 20px; border-radius:3px;
+    font-size:10px; letter-spacing:1px; color:#6b7280;
+    max-width:90vw; text-align:center;
+    box-shadow:0 0 20px rgba(0,229,255,0.05);
+  }
+  #status-bar span { color:var(--blue); }
+
+  /* PULSE MARKER */
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:0.5; transform:scale(1.3); }
+  }
+  @keyframes ring {
+    0% { transform:scale(0.5); opacity:0.8; }
+    100% { transform:scale(2.5); opacity:0; }
+  }
+  .pulse-marker {
+    position:relative; width:16px; height:16px;
+  }
+  .pulse-dot {
+    width:16px; height:16px; border-radius:50%;
+    background:var(--blue); border:2px solid #fff;
+    animation:pulse 1.5s infinite;
+    box-shadow:0 0 10px var(--blue);
+  }
+  .pulse-ring {
+    position:absolute; top:50%; left:50%; width:16px; height:16px;
+    border-radius:50%; border:2px solid var(--blue);
+    transform:translate(-50%,-50%);
+    animation:ring 2s infinite;
+  }
+
+  /* TOAST */
+  #toast {
+    position:fixed; top:70px; left:50%; transform:translateX(-50%);
+    background:rgba(0,230,118,0.15); border:1px solid var(--green);
+    color:var(--green); padding:6px 20px; border-radius:3px;
+    font-size:10px; letter-spacing:2px; z-index:9000;
+    display:none; text-transform:uppercase;
+  }
+
+  /* LEAFLET DARK THEME */
+  .leaflet-tile { filter:brightness(0.7) saturate(0.5) hue-rotate(200deg); }
+  .leaflet-control-zoom { display:none; }
+
+  /* ACCURACY CIRCLE */
+  .accuracy-fill { fill:rgba(0,229,255,0.05); }
+  .accuracy-stroke { stroke:rgba(0,229,255,0.4); }
+
+  /* MOBILE */
+  @media(max-width:600px) {
+    #panel-left { left:4px; min-width:160px; font-size:10px; }
+    #panel-right { right:4px; min-width:150px; }
+    .btn { font-size:9px; padding:6px 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- CORNER BRACKETS -->
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- TOP HUD -->
+<div id="hud-top">
+  <span class="title">J.A.R.V.I.S.</span>
+  <span style="color:#6b7280">GPS TRACKING SYSTEM</span>
+  <div id="status-dot"></div>
+  <span id="status-text" style="color:var(--amber)">ACQUIRING</span>
+</div>
+
+<!-- LEFT DATA PANEL -->
+<div id="panel-left">
+  <div class="panel-title">&#9632; TELEMETRY</div>
+  <div class="data-row"><span class="data-label">LAT</span><span class="data-value" id="d-lat">---</span></div>
+  <div class="data-row"><span class="data-label">LNG</span><span class="data-value" id="d-lng">---</span></div>
+  <div class="data-row"><span class="data-label">ALT</span><span class="data-value blue" id="d-alt">--- m</span></div>
+  <div class="data-row"><span class="data-label">SPEED</span><span class="data-value green" id="d-speed">0.0 km/h</span></div>
+  <div class="data-row"><span class="data-label">HEADING</span><span class="data-value" id="d-heading">---&deg;</span></div>
+  <div class="data-row"><span class="data-label">ACCURACY</span><span class="data-value" id="d-acc">--- m</span></div>
+  <div class="data-row"><span class="data-label">DISTANCE</span><span class="data-value blue" id="d-dist">0.00 km</span></div>
+  <div class="data-row"><span class="data-label">POINTS</span><span class="data-value" id="d-pts">0</span></div>
+  <div class="data-row"><span class="data-label">UPDATED</span><span class="data-value" id="d-time">---</span></div>
+
+  <!-- COMPASS -->
+  <div class="compass-wrap">
+    <div style="text-align:center; margin-top:8px;">
+      <div style="font-size:9px; color:#6b7280; letter-spacing:2px; margin-bottom:6px;">HEADING</div>
+      <div id="compass">
+        <div id="compass-needle"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT CONTROLS PANEL -->
+<div id="panel-right">
+  <div class="panel-title">&#9632; CONTROLS</div>
+  <button class="btn" id="btn-toggle" onclick="toggleTracking()">
+    <span class="icon">&#9654;</span>START TRACKING
+  </button>
+  <button class="btn" onclick="centerMap()">
+    <span class="icon">&#8982;</span>CENTER ON ME
+  </button>
+  <button class="btn" onclick="shareLocation()">
+    <span class="icon">&#128205;</span>SHARE COORDS
+  </button>
+  <button class="btn danger" onclick="clearTrail()">
+    <span class="icon">&#10006;</span>CLEAR TRAIL
+  </button>
+  <button class="btn" onclick="exportGPX()">
+    <span class="icon">&#8659;</span>EXPORT GPX
+  </button>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; MAP STYLE</div>
+    <button class="btn" onclick="toggleMapStyle()" id="btn-map">
+      <span class="icon">&#127760;</span>DARK MODE
+    </button>
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div id="status-bar" id="status-bar">
+  SYS READY &mdash; <span>AWAITING GPS LOCK</span> &mdash; JARVIS v2.0
+</div>
+
+<!-- TOAST -->
+<div id="toast">COPIED TO CLIPBOARD</div>
+
+<script>
+// ─────────────────────────────────────────
+// MAP INIT
+// ─────────────────────────────────────────
+const map = L.map('map', { zoomControl:false, attributionControl:false });
+
+const tiles = {
+  dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:20}),
+  standard: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:20})
+};
+tiles.dark.addTo(map);
+map.setView([20,0], 3);
+
+let darkMode = true;
+function toggleMapStyle() {
+  if (darkMode) {
+    map.removeLayer(tiles.dark);
+    tiles.standard.addTo(map);
+    document.getElementById('btn-map').innerHTML = '<span class="icon">&#9790;</span>NIGHT MODE';
+  } else {
+    map.removeLayer(tiles.standard);
+    tiles.dark.addTo(map);
+    document.getElementById('btn-map').innerHTML = '<span class="icon">&#127760;</span>DARK MODE';
+  }
+  darkMode = !darkMode;
+}
+
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
+let watchId = null;
+let tracking = false;
+let trail = [];
+let trailLine = null;
+let posMarker = null;
+let accCircle = null;
+let lastPos = null;
+let totalDist = 0;
+
+// Load saved trail
+try {
+  const saved = localStorage.getItem('gps_trail');
+  if (saved) {
+    trail = JSON.parse(saved);
+    if (trail.length > 1) drawTrail();
+  }
+} catch(e) { trail = []; }
+
+// ─────────────────────────────────────────
+// CUSTOM MARKER
+// ─────────────────────────────────────────
+function makePulseIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div class="pulse-marker"><div class="pulse-ring"></div><div class="pulse-dot"></div></div>`,
+    iconSize:[16,16],
+    iconAnchor:[8,8]
+  });
+}
+
+// ─────────────────────────────────────────
+// GPS CORE
+// ─────────────────────────────────────────
+function startTracking() {
+  if (!navigator.geolocation) {
+    setStatus('GPS NOT SUPPORTED', 'red');
+    return;
+  }
+  setStatus('ACQUIRING LOCK...', 'amber');
+  const opts = { enableHighAccuracy:true, timeout:15000, maximumAge:0 };
+  watchId = navigator.geolocation.watchPosition(onPosition, onError, opts);
+  tracking = true;
+  document.getElementById('btn-toggle').innerHTML = '<span class="icon">&#9646;&#9646;</span>STOP TRACKING';
+  document.getElementById('btn-toggle').classList.add('active');
+}
+
+function stopTracking() {
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  tracking = false;
+  document.getElementById('btn-toggle').innerHTML = '<span class="icon">&#9654;</span>START TRACKING';
+  document.getElementById('btn-toggle').classList.remove('active');
+  document.getElementById('status-dot').className = 'stopped';
+  document.getElementById('status-text').textContent = 'STANDBY';
+  document.getElementById('status-text').style.color = 'var(--red)';
+  setStatusBar('TRACKING PAUSED');
+}
+
+function toggleTracking() {
+  tracking ? stopTracking() : startTracking();
+}
+
+function onPosition(pos) {
+  const { latitude:lat, longitude:lng, altitude, speed, heading, accuracy } = pos.coords;
+  const now = new Date(pos.timestamp);
+  const latlng = [lat, lng];
+
+  // Status
+  document.getElementById('status-dot').className = 'tracking';
+  document.getElementById('status-text').textContent = 'TRACKING';
+  document.getElementById('status-text').style.color = 'var(--green)';
+
+  // Distance
+  if (lastPos) {
+    totalDist += haversine(lastPos, latlng);
+  }
+  lastPos = latlng;
+
+  // Trail
+  trail.push({ lat, lng, ts: pos.timestamp });
+  drawTrail();
+  try { localStorage.setItem('gps_trail', JSON.stringify(trail.slice(-500))); } catch(e){}
+
+  // Marker
+  if (!posMarker) {
+    posMarker = L.marker(latlng, {icon:makePulseIcon(), zIndexOffset:1000}).addTo(map);
+  } else {
+    posMarker.setLatLng(latlng);
+  }
+
+  // Accuracy circle
+  if (accCircle) map.removeLayer(accCircle);
+  accCircle = L.circle(latlng, {
+    radius: accuracy,
+    className: 'accuracy-fill accuracy-stroke',
+    fillColor:'#00e5ff', fillOpacity:0.05,
+    color:'#00e5ff', weight:1, opacity:0.3
+  }).addTo(map);
+
+  // Update HUD
+  document.getElementById('d-lat').textContent = lat.toFixed(6);
+  document.getElementById('d-lng').textContent = lng.toFixed(6);
+  document.getElementById('d-alt').textContent = altitude ? altitude.toFixed(1)+' m' : 'N/A';
+  const spd = speed !== null ? (speed * 3.6).toFixed(1)+' km/h' : '0.0 km/h';
+  document.getElementById('d-speed').textContent = spd;
+  const hdg = heading !== null ? heading.toFixed(0)+'&deg;' : '---&deg;';
+  document.getElementById('d-heading').innerHTML = hdg;
+  document.getElementById('d-acc').textContent = accuracy.toFixed(0)+' m';
+  document.getElementById('d-dist').textContent = (totalDist/1000).toFixed(2)+' km';
+  document.getElementById('d-pts').textContent = trail.length;
+  document.getElementById('d-time').textContent = now.toLocaleTimeString();
+
+  // Compass
+  if (heading !== null) {
+    document.getElementById('compass-needle').style.transform =
+      `translateX(-50%) translateY(-100%) rotate(${heading}deg)`;
+  }
+
+  setStatusBar(`GPS LOCK &#9632; ${lat.toFixed(5)}, ${lng.toFixed(5)} &#9632; ACC: ${accuracy.toFixed(0)}m`);
+}
+
+function onError(err) {
+  let msg;
+  switch(err.code) {
+    case 1: msg = 'PERMISSION DENIED — Enable location access'; break;
+    case 2: msg = 'POSITION UNAVAILABLE — Check GPS signal'; break;
+    case 3: msg = 'TIMEOUT — Retrying...'; break;
+    default: msg = 'GPS ERROR';
+  }
+  document.getElementById('status-dot').className = 'stopped';
+  document.getElementById('status-text').textContent = 'ERROR';
+  document.getElementById('status-text').style.color = 'var(--red)';
+  setStatusBar(msg);
+}
+
+// ─────────────────────────────────────────
+// TRAIL
+// ─────────────────────────────────────────
+function drawTrail() {
+  const points = trail.map(p => [p.lat, p.lng]);
+  if (trailLine) map.removeLayer(trailLine);
+  trailLine = L.polyline(points, {
+    color:'var(--blue)', weight:2.5, opacity:0.7, dashArray:'6,4'
+  }).addTo(map);
+}
+
+function clearTrail() {
+  trail = []; totalDist = 0;
+  if (trailLine) { map.removeLayer(trailLine); trailLine = null; }
+  localStorage.removeItem('gps_trail');
+  document.getElementById('d-dist').textContent = '0.00 km';
+  document.getElementById('d-pts').textContent = '0';
+  showToast('TRAIL CLEARED');
+}
+
+// ─────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────
+function centerMap() {
+  if (lastPos) map.setView(lastPos, 16, {animate:true});
+  else showToast('NO POSITION YET');
+}
+
+function shareLocation() {
+  if (!lastPos) { showToast('NO POSITION YET'); return; }
+  const txt = `${lastPos[0].toFixed(6)}, ${lastPos[1].toFixed(6)}`;
+  navigator.clipboard.writeText(txt).then(() => showToast('COORDS COPIED'));
+}
+
+function exportGPX() {
+  if (trail.length < 2) { showToast('NEED 2+ POINTS'); return; }
+  let gpx = `<?xml version="1.0"?>\n<gpx version="1.1" creator="JARVIS-GPS">\n<trk><name>JARVIS Track</name><trkseg>\n`;
+  trail.forEach(p => {
+    const t = new Date(p.ts).toISOString();
+    gpx += `<trkpt lat="${p.lat}" lon="${p.lng}"><time>${t}</time></trkpt>\n`;
+  });
+  gpx += `</trkseg></trk>\n</gpx>`;
+  const blob = new Blob([gpx], {type:'application/gpx+xml'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'jarvis_track.gpx'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('GPX EXPORTED');
+}
+
+function haversine(a, b) {
+  const R = 6371000;
+  const dLat = (b[0]-a[0]) * Math.PI/180;
+  const dLng = (b[1]-a[1]) * Math.PI/180;
+  const s = Math.sin(dLat/2)**2 + Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1-s));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.style.display = 'block';
+  setTimeout(() => t.style.display='none', 2500);
+}
+
+function setStatus(msg, color='blue') {
+  const colors = { blue:'var(--blue)', green:'var(--green)', red:'var(--red)', amber:'var(--amber)' };
+  document.getElementById('status-text').textContent = msg;
+  document.getElementById('status-text').style.color = colors[color] || colors.blue;
+}
+
+function setStatusBar(msg) {
+  document.getElementById('status-bar').innerHTML = msg;
+}
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+setStatusBar('SYSTEM ONLINE &mdash; <span>PRESS START TRACKING</span>');
+</script>
+</body>
+</html>
