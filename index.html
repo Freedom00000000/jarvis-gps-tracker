@@ -263,6 +263,13 @@
     </div>
   </div>
   <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; IP LOOKUP</div>
+    <div id="search-wrap">
+      <input id="ip-input" type="text" placeholder="IP adresse..."/>
+      <button id="search-btn" onclick="searchIP()">&#128269;</button>
+    </div>
+  </div>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
     <div class="panel-title">&#9632; MAP STYLE</div>
     <button class="btn" onclick="toggleMapStyle()" id="btn-map">
       <span class="icon">&#127760;</span>DARK MODE
@@ -470,6 +477,33 @@ function centerMap() {
   if (lastPos) map.setView(lastPos, 16, {animate:true});
   else showToast('NO POSITION YET');
 }
+
+let ipMarker = null;
+function searchIP() {
+  const ip = document.getElementById('ip-input').value.trim();
+  if (!ip) return;
+  setStatusBar(`IP LOOKUP: ${ip}`);
+  fetch(`https://ipapi.co/${ip}/json/`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { showToast('IP IKKE FUNDET'); return; }
+      const lat = parseFloat(d.latitude);
+      const lng = parseFloat(d.longitude);
+      map.setView([lat, lng], 10);
+      if (ipMarker) map.removeLayer(ipMarker);
+      ipMarker = L.marker([lat, lng]).addTo(map)
+        .bindPopup(`IP: ${d.ip}<br>By: ${d.city}<br>Land: ${d.country_name}<br>ISP: ${d.org}`)
+        .openPopup();
+      setStatusBar(`IP: ${d.ip} &#9632; ${d.city}, ${d.country_name}`);
+    })
+    .catch(() => showToast('LOOKUP FEJL'));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('ip-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchIP();
+  });
+});
 
 let searchMarker = null;
 function searchLocation() {
