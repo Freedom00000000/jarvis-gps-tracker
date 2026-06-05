@@ -483,18 +483,18 @@ function searchIP() {
   const ip = document.getElementById('ip-input').value.trim();
   if (!ip) return;
   setStatusBar(`IP LOOKUP: ${ip}`);
-  fetch(`https://ipapi.co/${ip}/json/`)
+  fetch(`http://ip-api.com/json/${ip}?fields=status,message,lat,lon,city,country,isp,query`)
     .then(r => r.json())
     .then(d => {
-      if (d.error) { showToast('IP IKKE FUNDET'); return; }
-      const lat = parseFloat(d.latitude);
-      const lng = parseFloat(d.longitude);
+      if (d.status !== 'success') { showToast('IP IKKE FUNDET'); return; }
+      const lat = d.lat;
+      const lng = d.lon;
       map.setView([lat, lng], 10);
       if (ipMarker) map.removeLayer(ipMarker);
       ipMarker = L.marker([lat, lng]).addTo(map)
-        .bindPopup(`IP: ${d.ip}<br>By: ${d.city}<br>Land: ${d.country_name}<br>ISP: ${d.org}`)
+        .bindPopup(`IP: ${d.query}<br>By: ${d.city}<br>Land: ${d.country}<br>ISP: ${d.isp}`)
         .openPopup();
-      setStatusBar(`IP: ${d.ip} &#9632; ${d.city}, ${d.country_name}`);
+      setStatusBar(`IP: ${d.query} &#9632; ${d.city}, ${d.country}`);
     })
     .catch(() => showToast('LOOKUP FEJL'));
 }
