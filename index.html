@@ -448,8 +448,10 @@ function centerMap() {
 
 function shareLocation() {
   if (!lastPos) { showToast('NO POSITION YET'); return; }
-  const txt = `${lastPos[0].toFixed(6)}, ${lastPos[1].toFixed(6)}`;
-  navigator.clipboard.writeText(txt).then(() => showToast('COORDS COPIED'));
+  const lat = lastPos[0].toFixed(6);
+  const lng = lastPos[1].toFixed(6);
+  const link = `https://www.google.com/maps?q=${lat},${lng}`;
+  navigator.clipboard.writeText(link).then(() => showToast('LINK COPIED — SEND IT!'));
 }
 
 function exportGPX() {
