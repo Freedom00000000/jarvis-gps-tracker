@@ -92,6 +92,24 @@
   .btn:hover { background:rgba(0,229,255,0.08); border-color:var(--blue); color:var(--blue); }
   .btn.active { background:rgba(0,230,118,0.12); border-color:var(--green); color:var(--green); }
   .btn.danger { border-color:rgba(229,57,53,0.4); }
+
+  /* SEARCH */
+  #search-wrap { display:flex; gap:4px; margin-bottom:8px; }
+  #search-input {
+    flex:1; padding:8px 10px; background:transparent;
+    border:1px solid var(--border); border-radius:3px;
+    color:#cdd6f4; font-family:'Courier New',monospace;
+    font-size:10px; letter-spacing:1px; outline:none;
+  }
+  #search-input:focus { border-color:var(--blue); }
+  #search-input::placeholder { color:#4a5568; }
+  #search-btn {
+    padding:8px 10px; background:transparent;
+    border:1px solid var(--border); border-radius:3px;
+    color:var(--blue); font-size:13px; cursor:pointer;
+    transition:all 0.2s;
+  }
+  #search-btn:hover { background:rgba(0,229,255,0.08); border-color:var(--blue); }
   .btn.danger:hover { background:rgba(229,57,53,0.12); border-color:var(--red); color:var(--red); }
   .btn .icon { margin-right:8px; }
 
@@ -237,6 +255,13 @@
   <button class="btn" onclick="exportGPX()">
     <span class="icon">&#8659;</span>EXPORT GPX
   </button>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; SEARCH LOCATION</div>
+    <div id="search-wrap">
+      <input id="search-input" type="text" placeholder="Søg adresse..."/>
+      <button id="search-btn" onclick="searchLocation()">&#128269;</button>
+    </div>
+  </div>
   <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
     <div class="panel-title">&#9632; MAP STYLE</div>
     <button class="btn" onclick="toggleMapStyle()" id="btn-map">
@@ -445,6 +470,30 @@ function centerMap() {
   if (lastPos) map.setView(lastPos, 16, {animate:true});
   else showToast('NO POSITION YET');
 }
+
+let searchMarker = null;
+function searchLocation() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) return;
+  setStatusBar(`SEARCHING: ${query}`);
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.length) { showToast('IKKE FUNDET'); setStatusBar('SEARCH: NO RESULTS'); return; }
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      const name = data[0].display_name;
+      map.setView([lat, lng], 15);
+      if (searchMarker) map.removeLayer(searchMarker);
+      searchMarker = L.marker([lat, lng]).addTo(map).bindPopup(name).openPopup();
+      setStatusBar(`FOUND: ${name.split(',')[0]}`);
+    })
+    .catch(() => { showToast('SEARCH FEJL'); });
+}
+
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchLocation();
+});
 
 function shareLocation() {
   if (!lastPos) { showToast('NO POSITION YET'); return; }
