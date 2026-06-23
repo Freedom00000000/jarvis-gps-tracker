@@ -270,6 +270,14 @@
     </div>
   </div>
   <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; PING</div>
+    <div id="search-wrap">
+      <input id="ping-input" type="text" placeholder="IP eller domæne..."/>
+      <button id="search-btn" onclick="pingHost()">&#9654;</button>
+    </div>
+    <div id="ping-result" style="font-size:9px; color:var(--blue); margin-top:6px; letter-spacing:1px;"></div>
+  </div>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
     <div class="panel-title">&#9632; MAP STYLE</div>
     <button class="btn" onclick="toggleMapStyle()" id="btn-map">
       <span class="icon">&#127760;</span>DARK MODE
@@ -503,7 +511,41 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('ip-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') searchIP();
   });
+  document.getElementById('ping-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') pingHost();
+  });
 });
+
+function pingHost() {
+  const host = document.getElementById('ping-input').value.trim();
+  if (!host) return;
+  const el = document.getElementById('ping-result');
+  el.style.color = 'var(--blue)';
+  el.textContent = `PINGING ${host}...`;
+  const start = performance.now();
+  fetch(`https://ipwho.is/${host}`)
+    .then(r => r.json())
+    .then(d => {
+      const ms = Math.round(performance.now() - start);
+      if (d.success) {
+        el.style.color = 'var(--green)';
+        el.textContent = `ONLINE ▸ ${ms}ms ▸ ${d.city}, ${d.country}`;
+        const lat = d.latitude, lng = d.longitude;
+        map.setView([lat, lng], 10);
+        if (ipMarker) map.removeLayer(ipMarker);
+        ipMarker = L.marker([lat, lng]).addTo(map)
+          .bindPopup(`PING: ${host}<br>Svartid: ${ms}ms<br>By: ${d.city}<br>Land: ${d.country}<br>ISP: ${d.connection.isp}`)
+          .openPopup();
+      } else {
+        el.style.color = 'var(--amber)';
+        el.textContent = `SVAR: ${ms}ms (ingen lokation)`;
+      }
+    })
+    .catch(() => {
+      el.style.color = 'var(--red)';
+      el.textContent = `OFFLINE eller ikke fundet`;
+    });
+}
 
 let searchMarker = null;
 function searchLocation() {
