@@ -92,11 +92,29 @@
   .btn:hover { background:rgba(0,229,255,0.08); border-color:var(--blue); color:var(--blue); }
   .btn.active { background:rgba(0,230,118,0.12); border-color:var(--green); color:var(--green); }
   .btn.danger { border-color:rgba(229,57,53,0.4); }
+
+  /* SEARCH */
+  #search-wrap { display:flex; gap:4px; margin-bottom:8px; }
+  #search-input {
+    flex:1; padding:8px 10px; background:transparent;
+    border:1px solid var(--border); border-radius:3px;
+    color:#cdd6f4; font-family:'Courier New',monospace;
+    font-size:10px; letter-spacing:1px; outline:none;
+  }
+  #search-input:focus { border-color:var(--blue); }
+  #search-input::placeholder { color:#4a5568; }
+  #search-btn {
+    padding:8px 10px; background:transparent;
+    border:1px solid var(--border); border-radius:3px;
+    color:var(--blue); font-size:13px; cursor:pointer;
+    transition:all 0.2s;
+  }
+  #search-btn:hover { background:rgba(0,229,255,0.08); border-color:var(--blue); }
   .btn.danger:hover { background:rgba(229,57,53,0.12); border-color:var(--red); color:var(--red); }
   .btn .icon { margin-right:8px; }
 
   /* COMPASS */
-  #compass-wrap {
+  .compass-wrap {
     display:flex; justify-content:center; margin:12px 0;
   }
   #compass {
@@ -238,6 +256,28 @@
     <span class="icon">&#8659;</span>EXPORT GPX
   </button>
   <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; SEARCH LOCATION</div>
+    <div id="search-wrap">
+      <input id="search-input" type="text" placeholder="Søg adresse..."/>
+      <button id="search-btn" onclick="searchLocation()">&#128269;</button>
+    </div>
+  </div>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; IP LOOKUP</div>
+    <div id="search-wrap">
+      <input id="ip-input" type="text" placeholder="IP adresse..."/>
+      <button id="search-btn" onclick="searchIP()">&#128269;</button>
+    </div>
+  </div>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
+    <div class="panel-title">&#9632; PING</div>
+    <div id="search-wrap">
+      <input id="ping-input" type="text" placeholder="IP eller domæne..."/>
+      <button id="search-btn" onclick="pingHost()">&#9654;</button>
+    </div>
+    <div id="ping-result" style="font-size:9px; color:var(--blue); margin-top:6px; letter-spacing:1px;"></div>
+  </div>
+  <div style="margin-top:12px; border-top:1px solid var(--border); padding-top:10px;">
     <div class="panel-title">&#9632; MAP STYLE</div>
     <button class="btn" onclick="toggleMapStyle()" id="btn-map">
       <span class="icon">&#127760;</span>DARK MODE
@@ -246,7 +286,7 @@
 </div>
 
 <!-- STATUS BAR -->
-<div id="status-bar" id="status-bar">
+<div id="status-bar">
   SYS READY &mdash; <span>AWAITING GPS LOCK</span> &mdash; JARVIS v2.0
 </div>
 
@@ -388,15 +428,15 @@ function onPosition(pos) {
   document.getElementById('d-alt').textContent = altitude ? altitude.toFixed(1)+' m' : 'N/A';
   const spd = speed !== null ? (speed * 3.6).toFixed(1)+' km/h' : '0.0 km/h';
   document.getElementById('d-speed').textContent = spd;
-  const hdg = heading !== null ? heading.toFixed(0)+'&deg;' : '---&deg;';
-  document.getElementById('d-heading').innerHTML = hdg;
+  const hdg = Number.isFinite(heading) ? heading.toFixed(0)+'°' : '---°';
+  document.getElementById('d-heading').textContent = hdg;
   document.getElementById('d-acc').textContent = accuracy.toFixed(0)+' m';
   document.getElementById('d-dist').textContent = (totalDist/1000).toFixed(2)+' km';
   document.getElementById('d-pts').textContent = trail.length;
   document.getElementById('d-time').textContent = now.toLocaleTimeString();
 
   // Compass
-  if (heading !== null) {
+  if (Number.isFinite(heading)) {
     document.getElementById('compass-needle').style.transform =
       `translateX(-50%) translateY(-100%) rotate(${heading}deg)`;
   }
@@ -425,7 +465,7 @@ function drawTrail() {
   const points = trail.map(p => [p.lat, p.lng]);
   if (trailLine) map.removeLayer(trailLine);
   trailLine = L.polyline(points, {
-    color:'var(--blue)', weight:2.5, opacity:0.7, dashArray:'6,4'
+    color:'#00e5ff', weight:2.5, opacity:0.7, dashArray:'6,4'
   }).addTo(map);
 }
 
@@ -446,10 +486,97 @@ function centerMap() {
   else showToast('NO POSITION YET');
 }
 
+let ipMarker = null;
+function searchIP() {
+  const ip = document.getElementById('ip-input').value.trim();
+  if (!ip) return;
+  setStatusBar(`IP LOOKUP: ${ip}`);
+  fetch(`https://ipwho.is/${ip}`)
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) { showToast('IP IKKE FUNDET'); return; }
+      const lat = d.latitude;
+      const lng = d.longitude;
+      map.setView([lat, lng], 10);
+      if (ipMarker) map.removeLayer(ipMarker);
+      ipMarker = L.marker([lat, lng]).addTo(map)
+        .bindPopup(`IP: ${d.ip}<br>By: ${d.city}<br>Land: ${d.country}<br>ISP: ${d.connection.isp}`)
+        .openPopup();
+      setStatusBar(`IP: ${d.ip} &#9632; ${d.city}, ${d.country}`);
+    })
+    .catch(() => showToast('LOOKUP FEJL'));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('ip-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchIP();
+  });
+  document.getElementById('ping-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') pingHost();
+  });
+});
+
+function pingHost() {
+  const host = document.getElementById('ping-input').value.trim();
+  if (!host) return;
+  const el = document.getElementById('ping-result');
+  el.style.color = 'var(--blue)';
+  el.textContent = `PINGING ${host}...`;
+  const start = performance.now();
+  fetch(`https://ipwho.is/${host}`)
+    .then(r => r.json())
+    .then(d => {
+      const ms = Math.round(performance.now() - start);
+      if (d.success) {
+        el.style.color = 'var(--green)';
+        el.textContent = `ONLINE ▸ ${ms}ms ▸ ${d.city}, ${d.country}`;
+        const lat = d.latitude, lng = d.longitude;
+        map.setView([lat, lng], 10);
+        if (ipMarker) map.removeLayer(ipMarker);
+        ipMarker = L.marker([lat, lng]).addTo(map)
+          .bindPopup(`PING: ${host}<br>Svartid: ${ms}ms<br>By: ${d.city}<br>Land: ${d.country}<br>ISP: ${d.connection.isp}`)
+          .openPopup();
+      } else {
+        el.style.color = 'var(--amber)';
+        el.textContent = `SVAR: ${ms}ms (ingen lokation)`;
+      }
+    })
+    .catch(() => {
+      el.style.color = 'var(--red)';
+      el.textContent = `OFFLINE eller ikke fundet`;
+    });
+}
+
+let searchMarker = null;
+function searchLocation() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) return;
+  setStatusBar(`SEARCHING: ${query}`);
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+    .then(r => r.json())
+    .then(data => {
+      if (!data.length) { showToast('IKKE FUNDET'); setStatusBar('SEARCH: NO RESULTS'); return; }
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      const name = data[0].display_name;
+      map.setView([lat, lng], 15);
+      if (searchMarker) map.removeLayer(searchMarker);
+      searchMarker = L.marker([lat, lng]).addTo(map).bindPopup(name).openPopup();
+      setStatusBar(`FOUND: ${name.split(',')[0]}`);
+    })
+    .catch(() => { showToast('SEARCH FEJL'); });
+}
+
+document.getElementById('search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') searchLocation();
+});
+
 function shareLocation() {
   if (!lastPos) { showToast('NO POSITION YET'); return; }
-  const txt = `${lastPos[0].toFixed(6)}, ${lastPos[1].toFixed(6)}`;
-  navigator.clipboard.writeText(txt).then(() => showToast('COORDS COPIED'));
+  const lat = lastPos[0].toFixed(6);
+  const lng = lastPos[1].toFixed(6);
+  const link = `https://www.google.com/maps?q=${lat},${lng}`;
+  navigator.clipboard.writeText(link).then(() => showToast('LINK COPIED — SEND IT!'));
 }
 
 function exportGPX() {
